@@ -45,21 +45,16 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
-task setUp(type:NpmTask){
-    description = "Install Node.js packages"
-    args = ['install']
-    inputs.files file('package.json')
-    outputs.files file('node_modules')
+task setUp(type:NpmTask) {
+	description = 'install Node.js packages'
+	args = ['install']
+	inputs.files file('package.json')
+	outputs.files file('node_modules')
 }
 
-task buildFrontEnd(type:NpmTask,dependsOn:setUp){
-    description="build vue.js"
-    args = ['run', 'build']
+task buildFrontEnd(type:NpmTask,dependsOn:setUp) {
+	description = 'Build vue.js'
+	args = ['run', 'build']
 }
 
 processResources.dependsOn 'buildFrontEnd'
-
-
-
-
-

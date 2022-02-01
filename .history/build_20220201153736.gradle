@@ -52,12 +52,13 @@ task setUp(type:NpmTask){
     outputs.files file('node_modules')
 }
 
+
 task buildFrontEnd(type:NpmTask,dependsOn:setUp){
     description="build vue.js"
     args = ['run', 'build']
-}
 
-processResources.dependsOn 'buildFrontEnd'
+    processResources.dependsOn 'buildFrontEnd'
+}
 
 
 

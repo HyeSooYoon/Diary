@@ -55,9 +55,9 @@ task setUp(type:NpmTask){
 task buildFrontEnd(type:NpmTask,dependsOn:setUp){
     description="build vue.js"
     args = ['run', 'build']
-}
 
-processResources.dependsOn 'buildFrontEnd'
+    processResources.dependsOn 'buildFrontEnd'
+}
 
 
 
