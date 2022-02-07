@@ -24,6 +24,10 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.CorsUtils;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -41,38 +45,54 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
     //     auth.authenticationProvider(authenticationProvider); 
     // }
 
-    /* * 스프링 시큐리티 룰을 무시하게 하는 Url 규칙(여기 등록하면 규칙 적용하지 않음) */ 
-    @Override
-    public void configure(WebSecurity web) throws Exception {
-        web.ignoring()
-        // .antMatchers("/resources/**")
-        // .antMatchers("/css/**")
-        // .antMatchers("/vendor/**")
-        // .antMatchers("/js/**")
-        // .antMatchers("/favicon*/**")
-        .antMatchers("/**");
-    }
+    // @Override
+    // public void configure(WebSecurity web) throws Exception {
+    //     web.ignoring()
+    //     // .antMatchers("/resources/**")
+    //     // .antMatchers("/css/**")
+    //     // .antMatchers("/vendor/**")
+    //     // .antMatchers("/js/**")
+    //     // .antMatchers("/favicon*/**")
+    //     .antMatchers("/**");
+    // }
 
-    /* * 스프링 시큐리티 규칙 */         
+    @Override
+     protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+         auth.inMemoryAuthentication()
+             .withUser("foo").password("{noop}bar").roles("USER");
+     }
+ 
     @Override 
     protected void configure(HttpSecurity http) throws Exception { 
-        http.authorizeRequests()                   //보호된 리소스 URI에 접근할 수 있는 권한을 설정 
-            .antMatchers("/login*/**").permitAll() //전체 접근 허용 
-            .antMatchers("/logout/**").permitAll() 
-            .antMatchers("/myPage").hasRole("ADMIN")//admin이라는 롤을 가진 사용자만 접근 허용 
-            .antMatchers("/chatbot/**").permitAll() 
-            .anyRequest().authenticated() 
+        http.authorizeRequests()                   
+            // .antMatchers("/api/**").permitAll()  
+            .requestMatchers(CorsUtils::isPreFlightRequest).permitAll() // - (1)            
+            .anyRequest().authenticated()            
+            .and().cors() // - (2)
         .and().logout() 
             .logoutUrl("/logout") 
             .logoutSuccessHandler(logoutSuccessHandler()) 
         .and().csrf()                        
-              .disable()                     //해당 기능을 사용하기 위해서는 프론트단에서 csrf토큰값 보내줘야함 
+              .disable()                     
         .addFilter(jwtAuthenticationFilter())//Form Login에 사용되는 custom AuthenticationFilter 구현체를 등록 
         .addFilter(jwtAuthorizationFilter()) //Header 인증에 사용되는 BasicAuthenticationFilter 구현체를 등록 
         .exceptionHandling() 
             .accessDeniedHandler(accessDeniedHandler()) 
             .authenticationEntryPoint(authenticationEntryPoint()) ; 
-    } 
+    }
+    
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration(); // - (3)
+        configuration.addAllowedOrigin("*");
+        configuration.addAllowedMethod("*");
+        configuration.addAllowedHeader("*");
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
     
     /* * SuccessHandler bean register */     
     @Bean 
@@ -132,11 +152,11 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
         return jwtAuthorizationFilter;
     }
 
-    @Bean 
-    public PasswordEncoder passwordEncoder() {
-        //간단하게 비밀번호 암호화 
-        return new BCryptPasswordEncoder(); 
-    }
+    // @Bean 
+    // public PasswordEncoder passwordEncoder() {
+    //     //간단하게 비밀번호 암호화 
+    //     return new BCryptPasswordEncoder(); 
+    // }
 
 
     
