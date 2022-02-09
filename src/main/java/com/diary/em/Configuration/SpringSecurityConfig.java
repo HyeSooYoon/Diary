@@ -1,5 +1,6 @@
 package com.diary.em.Configuration;
 
+
 import com.diary.em.ResponseHandler.CustomAccessDeniedHandler;
 import com.diary.em.ResponseHandler.CustomAuthenticationEntryPoint;
 import com.diary.em.ResponseHandler.CustomAuthenticationFailureHandler;
@@ -7,8 +8,10 @@ import com.diary.em.ResponseHandler.CustomAuthenticationSuccessHandler;
 import com.diary.em.ResponseHandler.CustomLogoutSuccessHandler;
 import com.diary.em.ResponseHandler.JwtAuthenticationFilter;
 import com.diary.em.ResponseHandler.JwtAuthorizationFilter;
-
+import com.diary.em.Util.JwtUtil;
+import javax.servlet.*;
 import org.springframework.beans.factory.annotation.Configurable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -17,6 +20,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -32,6 +36,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 @EnableWebSecurity
 public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Value("${jwt.secret}")//깃허브등에 올릴때 외부에 들어나지 않도록 properties.yml에서 가져옴
+    private String secret;
 
     // private AuthenticationProvider authenticationProvider;
 
@@ -64,27 +71,36 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
  
     @Override 
     protected void configure(HttpSecurity http) throws Exception { 
-        http.authorizeRequests()                   
-            // .antMatchers("/api/**").permitAll()  
-            .requestMatchers(CorsUtils::isPreFlightRequest).permitAll() // - (1)            
+        
+        //BasicAuthenticationFilter을 상속받음
+        Filter filter = new JwtAuthorizationFilter(authenticationManager(),jwtUtil());
+
+        http.formLogin().disable()  //디폴트 로그인 폼을 없앰
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        .and()
+            .authorizeRequests()                   
+            // .antMatchers("/api/**").permitAll()              
+            .requestMatchers(CorsUtils::isPreFlightRequest).permitAll() // CORS preflight 일경우 무시
             .anyRequest().authenticated()            
-            .and().cors() // - (2)
         .and().logout() 
             .logoutUrl("/logout") 
             .logoutSuccessHandler(logoutSuccessHandler()) 
-        .and().csrf()                        
-              .disable()                     
-        .addFilter(jwtAuthenticationFilter())//Form Login에 사용되는 custom AuthenticationFilter 구현체를 등록 
-        .addFilter(jwtAuthorizationFilter()) //Header 인증에 사용되는 BasicAuthenticationFilter 구현체를 등록 
+        .and().csrf().disable()      
+              .cors().disable() //cors기능을 끔               
+              .headers().frameOptions().disable()//iframe 차단기능을 끔
+        .and()
+            // .addFilter(jwtAuthenticationFilter())//Form Login에 사용되는 custom AuthenticationFilter 구현체를 등록  
+            .addFilter(filter)//필터만들어서 적용
         .exceptionHandling() 
             .accessDeniedHandler(accessDeniedHandler()) 
-            .authenticationEntryPoint(authenticationEntryPoint()) ; 
+            .authenticationEntryPoint(authenticationEntryPoint()); 
     }
     
+    // 프론트 프록시서버 CORS preflight 예외 처리
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration(); // - (3)
-        configuration.addAllowedOrigin("*");
+        CorsConfiguration configuration = new CorsConfiguration();  
+        configuration.addAllowedOrigin("http://localhost:8080");
         configuration.addAllowedMethod("*");
         configuration.addAllowedHeader("*");
         configuration.setAllowCredentials(false);
@@ -94,39 +110,35 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
         return source;
     }
     
-    /* * SuccessHandler bean register */     
+    // 핸들러 처리
     @Bean 
     public AuthenticationSuccessHandler authenticationSuccessHandler() {
         CustomAuthenticationSuccessHandler successHandler = new CustomAuthenticationSuccessHandler();
-        successHandler.setDefaultTargetUrl("/index");
+        successHandler.setDefaultTargetUrl("/indexff");
         return successHandler;
     }
 
-    /* * FailureHandler bean register */ 
     @Bean
     public AuthenticationFailureHandler authenticationFailureHandler() {
         CustomAuthenticationFailureHandler failureHandler = new CustomAuthenticationFailureHandler();
         failureHandler.setDefaultFailureUrl("/loginPage?error=error");
         return failureHandler;
     }
-
-    /* * LogoutSuccessHandler bean register */ 
+ 
     @Bean
     public LogoutSuccessHandler logoutSuccessHandler() {
         CustomLogoutSuccessHandler logoutSuccessHandler = new CustomLogoutSuccessHandler();
         logoutSuccessHandler.setDefaultTargetUrl("/loginPage?logout=logout");
         return logoutSuccessHandler;
     }
-
-    /* * AccessDeniedHandler bean register */ 
+ 
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
         CustomAccessDeniedHandler accessDeniedHandler = new CustomAccessDeniedHandler();
         accessDeniedHandler.setErrorPage("/error/403");
         return accessDeniedHandler;
     }
-
-    /* * AuthenticationEntryPoint bean register */ 
+ 
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
         return new CustomAuthenticationEntryPoint("/loginPage?error=e");
@@ -144,19 +156,18 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
         jwtAuthenticationFilter.afterPropertiesSet();
         return jwtAuthenticationFilter;
     }
-
-    /* * Filter bean register */ 
-    @Bean
-    public JwtAuthorizationFilter jwtAuthorizationFilter() throws Exception {
-        JwtAuthorizationFilter jwtAuthorizationFilter = new JwtAuthorizationFilter(authenticationManager());
-        return jwtAuthorizationFilter;
+ 
+    // 간단하게 비밀번호 암호화 
+    @Bean 
+    public PasswordEncoder passwordEncoder() {        
+        return new BCryptPasswordEncoder(); 
     }
 
-    // @Bean 
-    // public PasswordEncoder passwordEncoder() {
-    //     //간단하게 비밀번호 암호화 
-    //     return new BCryptPasswordEncoder(); 
-    // }
+    // JwtUtil 빈 등록
+    @Bean
+    public JwtUtil jwtUtil(){
+        return new JwtUtil(secret);
+    }
 
 
     
