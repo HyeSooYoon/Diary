@@ -1,31 +1,23 @@
 package com.diary.em.Service;
+ 
+import lombok.RequiredArgsConstructor;
 
-import java.util.Set;
+import com.diary.em.Repository.UserRepository;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.userdetails.AuthenticationUserDetailsService;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.authentication.preauth.PreAuthenticatedCredentialsNotFoundException;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
+@RequiredArgsConstructor
 @Service
-public class CustomUserDetailService implements AuthenticationUserDetailsService<Authentication> {
+public class CustomUserDetailService implements UserDetailsService {
 
-    @Override  
-    public UserDetails loadUserDetails(Authentication token) {  
-        
-        User user = (User) token.getPrincipal();  
-        if (user == null) {  
-            throw new PreAuthenticatedCredentialsNotFoundException("USER IS NULL");  
-        }  
-        
-        // DB에 접근해서 직접 정보를 가져오는게 일반적입니다. 
-        return new CustomUserDetails().setUser(user).setGrantedAuthorities((Set<GrantedAuthority>) user.getAuthorities());
+    private final UserRepository userRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return userRepository.findByEmail(username)
+                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
     }
-    
 }

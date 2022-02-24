@@ -16,14 +16,9 @@ public class LoginController {
     final private static Logger LOG = Logger.getGlobal();
     public static final String SECURED_TEXT = "Hello from the secured resource!";
 
-    @GetMapping("/login")
-    public void login(Authentication authentication) {
+    @GetMapping("/test")
+    public void test() {
         
-        //Claims로 형변환
-        Claims claims = (Claims) authentication.getPrincipal();
-        //반환받을 타입을 String.class로 설정
-        String name = claims.get("name", String.class);
-
         LOG.info("GET successfully called on /login resource");
     }
  
