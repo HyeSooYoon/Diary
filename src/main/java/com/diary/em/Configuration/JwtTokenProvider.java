@@ -1,10 +1,13 @@
 package com.diary.em.Configuration;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -13,55 +16,87 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.diary.em.Repository.TokenRepository;
+import com.diary.em.Repository.UserRepository;
+import com.diary.em.Service.CustomUserDetailService;
+import com.diary.em.Service.RedisService;
+
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component 
 public class JwtTokenProvider {
 
-    private String secretKey = "secretKey-test-authorization-jwt-manage-token-by-hyesoo";
+    // 키
+    private String secretKey = "secretKey-test-authorization-jwt-manage-token-by-hyesoo";  
 
-    // 토큰 유효시간 30분
-    private long tokenValidTime = 30 * 60 * 1000L;
-    
-    private final UserDetailsService userDetailsService;
+    // 어세스 토큰 유효시간 | 20s
+    private long accessTokenValidTime = 20 * 1000L; // 30 * 60 * 1000L;
+    // 리프레시 토큰 유효시간 | 1m
+    private long refreshTokenValidTime = 1 * 60 * 1000L;
 
+    private final CustomUserDetailService customUserDetailService;
+    private final TokenRepository tokenRepository;
+    private final UserRepository userRepository;
+    private final RedisService redisService;
+
+    // 의존성 주입 후, 초기화를 수행
     // 객체 초기화, secretKey를 Base64로 인코딩한다.
     @PostConstruct
     protected void init() {
         secretKey = Base64.getEncoder().encodeToString(secretKey.getBytes());
     }
 
-    // JWT 토큰 생성
-    public String createToken(String userPk, List<String> roles) {
-        Claims claims = Jwts.claims().setSubject(userPk); // JWT payload 에 저장되는 정보단위
-        claims.put("roles", roles);                       // 정보는 key / value 쌍으로 저장된다.
-        Date now = new Date();
-        return Jwts.builder()
-                .setClaims(claims)  // 정보 저장
-                .setIssuedAt(now)   // 토큰 발행 시간 정보
-                .setExpiration(new Date(now.getTime() + tokenValidTime)) // set Expire Time
-                .signWith(SignatureAlgorithm.HS256, secretKey)           // 사용할 암호화 알고리즘과 
-                                                                         // signature 에 들어갈 secret값 세팅
-                .compact();
+    // Access Token 생성.
+    public String createAccessToken(String email, List<String> roles){
+        return this.createToken(email, roles, accessTokenValidTime);
+    }
+    // Refresh Token 생성.
+    public String createRefreshToken(String email, List<String> roles) {
+        return this.createToken(email, roles, refreshTokenValidTime);
     }
 
-    // JWT 토큰에서 인증 정보 조회
+    // Create token
+    public String createToken(String email, List<String> roles, long tokenValid) {
+        Claims claims = Jwts.claims().setSubject(email); // claims 생성 및 payload 설정
+        claims.put("roles", roles); // 권한 설정, key/ value 쌍으로 저장
+
+        Date date = new Date();
+        return Jwts.builder()
+                .setClaims(claims) // 발행 유저 정보 저장
+                .setIssuedAt(date) // 발행 시간 저장
+                .setExpiration(new Date(date.getTime() + tokenValid)) // 토큰 유효 시간 저장
+                .signWith(SignatureAlgorithm.HS256, secretKey) // 해싱 알고리즘 및 키 설정
+                .compact(); // 생성
+    }
+
+    // JWT 에서 인증 정보 조회
     public Authentication getAuthentication(String token) {
-        UserDetails userDetails = userDetailsService.loadUserByUsername(this.getUserPk(token));
+        UserDetails userDetails = customUserDetailService.loadUserByUsername(this.getUserEmail(token));
         return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
     }
 
     // 토큰에서 회원 정보 추출
-    public String getUserPk(String token) {
+    public String getUserEmail(String token) {
         return Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token).getBody().getSubject();
     }
 
-    // Request의 Header에서 token 값을 가져옵니다. "X-AUTH-TOKEN" : "TOKEN값'
-    public String resolveToken(HttpServletRequest request) {
-        return request.getHeader("X-AUTH-TOKEN");
+    // Request의 Header에서 AccessToken 값을 가져옵니다. "authorization" : "token'
+    public String resolveAccessToken(HttpServletRequest request) {
+        if(request.getHeader("authorization") != null )
+            return request.getHeader("authorization").substring(7);
+        return null;
+    }
+    // Request의 Header에서 RefreshToken 값을 가져옵니다. "authorization" : "token'
+    public String resolveRefreshToken(HttpServletRequest request) {
+        if(request.getHeader("refreshToken") != null )
+            return request.getHeader("refreshToken").substring(7);
+        return null;
     }
 
     // 토큰의 유효성 + 만료일자 확인
@@ -69,9 +104,33 @@ public class JwtTokenProvider {
         try {
             Jws<Claims> claims = Jwts.parser().setSigningKey(secretKey).parseClaimsJws(jwtToken);
             return !claims.getBody().getExpiration().before(new Date());
-        } catch (Exception e) {
+        } catch (ExpiredJwtException e) {
+            log.info(e.getMessage());
             return false;
         }
+    }
+
+    // 어세스 토큰 헤더 설정
+    public void setHeaderAccessToken(HttpServletResponse response, String accessToken) {
+        response.setHeader("authorization", "bearer "+ accessToken);
+    }
+
+    // 리프레시 토큰 헤더 설정
+    public void setHeaderRefreshToken(HttpServletResponse response, String refreshToken) {
+        response.setHeader("refreshToken", "bearer "+ refreshToken);
+    }
+
+    // RefreshToken 존재유무 확인
+    public boolean existsRefreshToken(String refreshToken) {
+
+        // H2 레퍼지토리내 존재확인
+        // return tokenRepository.existsByRefreshToken(refreshToken);
+        return redisService.getValues(refreshToken) != null;
+    }
+
+    // Email로 권한 정보 가져오기
+    public List<String> getRoles(String email) {
+        return userRepository.findByEmail(email).get().getRoles();
     }
     
 }
