@@ -72,6 +72,6 @@ public class UserController {
         redisService.setValues(refreshToken, member.getEmail());
  
         
-        return ResponseEntity.ok().body("로그인 성공!");
+        return ResponseEntity.ok().body("accessToken:" + accessToken);
     }
 }
