@@ -16,20 +16,21 @@ public class RedisController {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
-    @PostMapping("/redisTest")
-    public ResponseEntity<?> addRedisKey() {
-        ValueOperations<String, String> vop = redisTemplate.opsForValue();
-        vop.set("yellow", "banana");
-        vop.set("red", "apple");
-        vop.set("green", "watermelon");
-        return new ResponseEntity<>(HttpStatus.CREATED);
-    }
+    // Redis 테스트 용도... 
+    // @PostMapping("/redisTest")
+    // public ResponseEntity<?> addRedisKey() {
+    //     ValueOperations<String, String> vop = redisTemplate.opsForValue();
+    //     vop.set("yellow", "banana");
+    //     vop.set("red", "apple");
+    //     vop.set("green", "watermelon");
+    //     return new ResponseEntity<>(HttpStatus.CREATED);
+    // }
 
-    @GetMapping("/redisTest/{key}")
-    public ResponseEntity<?> getRedisKey(@PathVariable String key) {
-        ValueOperations<String, String> vop = redisTemplate.opsForValue();
-        String value = vop.get(key);
-        return new ResponseEntity<>(value, HttpStatus.OK);
-    }
+    // @GetMapping("/redisTest/{key}")
+    // public ResponseEntity<?> getRedisKey(@PathVariable String key) {
+    //     ValueOperations<String, String> vop = redisTemplate.opsForValue();
+    //     String value = vop.get(key);
+    //     return new ResponseEntity<>(value, HttpStatus.OK);
+    // }
     
 }
