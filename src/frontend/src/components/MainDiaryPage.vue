@@ -264,7 +264,8 @@ const moment = require('moment');
         date: moment(new Date()).format('DD MMM, YYYY'),
         count: 0,
         emcd: 'EM04',
-        now: moment().diff(moment(new Date()).format('YYYY-01-01'),"days")
+        now: moment().diff(moment(new Date()).format('YYYY-01-01'),"days"),
+        token: 'Bearer:' + localStorage.getItem('wtw-token')
       }
     },
     methods: {      
@@ -308,12 +309,14 @@ const moment = require('moment');
           
       }) 
     },
-    list: function() { 
-      // fetch('http://localhost:8080/api/list', {
-        fetch('http://localhost:8080/api/test', {
+    list: function() {  
+
+      fetch('http://localhost:8080/api/list', {
+        // fetch('http://localhost:8080/api/test', {
         method: 'get', 
         headers: {
-        'Content-Type': 'application/json'
+         'Content-Type': 'application/json',
+         'Authorization': this.token
         } 
         })
         .then(res => res.json())
